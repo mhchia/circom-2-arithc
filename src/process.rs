@@ -10,7 +10,7 @@ use crate::runtime::{
 };
 use circom_circom_algebra::num_traits::ToPrimitive;
 use circom_program_structure::ast::{
-    Access, AssignOp, Expression, ExpressionInfixOpcode, Statement,
+    Access, AssignOp, Expression, ExpressionInfixOpcode, ExpressionPrefixOpcode, Statement
 };
 use circom_program_structure::program_archive::ProgramArchive;
 use std::cell::RefCell;
@@ -272,6 +272,7 @@ pub fn process_expression(
         Expression::InfixOp {
             lhe, infix_op, rhe, ..
         } => handle_infix_op(ac, runtime, program_archive, infix_op, lhe, rhe),
+        Expression::PrefixOp { meta, prefix_op, rhe } => handle_prefix_op(ac, runtime, program_archive, prefix_op, rhe),
         Expression::Number(_, value) => {
             let signal_gen = runtime.get_signal_gen();
             let access = runtime
@@ -439,6 +440,57 @@ fn handle_infix_op(
 
     // Handle cases where one or both inputs are signals
     let lhs_id = get_signal_for_access(ac, ctx, signal_gen.clone(), &lhe_access)?;
+    let rhs_id = get_signal_for_access(ac, ctx, signal_gen.clone(), &rhe_access)?;
+
+    // Construct the corresponding circuit gate
+    let gate_type = AGateType::from(op);
+    let output_signal = ctx.declare_random_item(signal_gen, DataType::Signal)?;
+    let output_id = ctx.get_signal_id(&output_signal)?;
+
+    // Add output signal and gate to the circuit
+    ac.add_signal(
+        output_id,
+        output_signal.access_str(ctx.get_ctx_name()),
+        None,
+    )?;
+    ac.add_gate(gate_type, lhs_id, rhs_id, output_id)?;
+
+    Ok(output_signal)
+}
+
+/// Handles an infix operation.
+/// - If both inputs are variables, it directly computes the operation.
+/// - If one or both inputs are signals, it constructs the corresponding circuit gate.
+/// Returns the access to a variable containing the result of the operation or the signal of the output gate.
+fn handle_prefix_op(
+    ac: &mut ArithmeticCircuit,
+    runtime: &mut Runtime,
+    program_archive: &ProgramArchive,
+    op: &ExpressionPrefixOpcode,
+    rhe: &Expression,
+) -> Result<DataAccess, ProgramError> {
+    let rhe_access = process_expression(ac, runtime, program_archive, rhe)?;
+
+    let signal_gen: Rc<RefCell<u32>> = runtime.get_signal_gen();
+    let ctx = runtime.current_context()?;
+
+    // Determine the data type of the operand
+    let rhs_data_type = ctx.get_item_data_type(&rhe_access.get_name())?;
+
+    // Handle the variable case
+    if rhs_data_type == DataType::Variable {
+        let rhs_value = ctx
+            .get_variable_value(&rhe_access)?
+            .ok_or(ProgramError::EmptyDataItem)?;
+
+        let op_res = execute_prefix_op(op, rhs_value)?;
+        let item_access = ctx.declare_random_item(signal_gen, DataType::Variable)?;
+        ctx.set_variable(&item_access, Some(op_res))?;
+
+        return Ok(item_access);
+    }
+
+    // Handle signal input
     let rhs_id = get_signal_for_access(ac, ctx, signal_gen.clone(), &rhe_access)?;
 
     // Construct the corresponding circuit gate
@@ -652,6 +704,33 @@ fn execute_op(lhs: u32, rhs: u32, op: &ExpressionInfixOpcode) -> Result<u32, Pro
         ExpressionInfixOpcode::BitOr => lhs | rhs,
         ExpressionInfixOpcode::BitAnd => lhs & rhs,
         ExpressionInfixOpcode::BitXor => lhs ^ rhs,
+    };
+
+    Ok(res)
+}
+
+/// Executes a prefix operation on a u32 value, performing the specified arithmetic or logical computation.
+fn execute_prefix_op(op: &ExpressionPrefixOpcode, rhs: u32) -> Result<u32, ProgramError> {
+    let res = match op {
+        ExpressionPrefixOpcode::Sub => {
+            // TODO: This implements underflow, is that what we want?
+            //       Maybe abort compile instead?
+            if rhs == 0 {
+                0
+            } else {
+                u32::MAX - rhs + 1
+            }
+        },
+        ExpressionPrefixOpcode::BoolNot => {
+            if rhs == 0 {
+                1
+            } else {
+                0
+            }
+        },
+        ExpressionPrefixOpcode::Complement => {
+            !rhs
+        },
     };
 
     Ok(res)

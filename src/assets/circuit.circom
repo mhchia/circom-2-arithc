@@ -94,7 +94,7 @@ template div_relu(k) {
     sign.in <== shiftRight.out;
 
     component switcher = Switcher();
-    switcher.sel <== sign.sign;
+    switcher.sel <== !sign.sign;
     switcher.L <== shiftRight.out;
     switcher.R <== 0;
     //switcher.outR*0 === 0;
