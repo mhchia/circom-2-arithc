@@ -216,19 +216,29 @@ impl ArithmeticCircuit {
             AGateType::AAdd => {
                 // println!("{} = {} + {}", o_name, lh_name, rh_name);
             }
-            AGateType::ADiv => todo!(),
-            AGateType::AEq => todo!(),
-            AGateType::AGEq => todo!(),
-            AGateType::AGt => todo!(),
-            AGateType::ALEq => todo!(),
+            AGateType::ADiv => {
+                // println!("{} = {} / {}", o_name, lh_name, rh_name);
+            }
+            AGateType::AEq => {
+
+            }
+            AGateType::AGEq => {
+
+            }
+            AGateType::AGt => {
+
+            }
+            AGateType::ALEq => {
+
+            }
             AGateType::ALt => {
                 // println!("{} = {} < {}", o_name, lh_name, rh_name);
             }
             AGateType::AMul => {
                 // println!("{} = {} * {}", o_name, lh_name, rh_name);
             }
-            AGateType::ANeq => todo!(),
-            AGateType::ANone => todo!(),
+            AGateType::ANeq => {}
+            AGateType::ANone => {}
             AGateType::ASub => {
                 // println!("{} = {} - {}", o_name, lh_name, rh_name);
             }
